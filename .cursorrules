@@ -1,0 +1,109 @@
+You are working in KeelStack v1.1 — a production-grade Node.js + TypeScript backend.
+
+# LAYER WRITE PERMISSIONS
+
+Sourced from src/07-AI/boundaries/AIBoundary.ts — the authoritative reference.
+
+| Layer         | AI Write? | Reason                                                               |
+|---------------|-----------|----------------------------------------------------------------------|
+| 01-Core       | ❌ NO     | Security-critical (errors, middleware, guards). Human review required. |
+| 02-Common     | ✅ YES    | DTOs, types, utils. Low risk.                                        |
+| 03-Policies   | ❌ NO     | Business rules. Wrong policy = revenue leak or data loss.            |
+| 04-Modules    | ✅ YES    | Feature modules. Auth/billing modifications need human review.       |
+| 05-Infra      | ❌ NO     | DB schema + gateways. Schema changes require migrations.             |
+| 06-Background | ✅ YES    | Adding job types is safe. WorkerPool changes need human review.      |
+| 07-AI         | ❌ NO     | LLMClient controls costs. AI must not modify its own constraints.    |
+| 08-Web        | ✅ YES    | Routes are safe to add. Must use the full middleware chain.          |
+
+NOTE: Within 05-Infra, schema.ts and gateway clients are strictly off-limits.
+Gateway sandbox adapters may be extended with explicit human approval only.
+
+# LAYER IMPORT RULES
+
+Layers are numbered 01–08. The permitted import directions (verified against codebase):
+
+  01-Core       ← no upstream imports
+  02-Common     ← may import from 01-Core
+  03-Policies   ← may import from 01-Core, 02-Common
+  04-Modules    ← may import from 01-Core, 02-Common, 03-Policies, 05-Infra, 06-Background
+  05-Infra      ← may import from 01-Core, 02-Common
+  06-Background ← may import from 01-Core, 02-Common, 04-Modules, 05-Infra
+  07-AI         ← may import from 01-Core, 02-Common
+  08-Web        ← may import from 01-Core, 02-Common, 04-Modules, 06-Background, 07-AI
+
+The layer order is NOT strictly sequential — 04-Modules legitimately imports from
+05-Infra (providers) and 06-Background (EventBus). Never add reverse-direction imports
+(e.g. 01-Core importing from 04-Modules).
+
+# HARD RULES
+
+- Never modify files in src/01-Core without explicit human instruction
+- Never bypass src/03-Policies checks in modules or routes
+- Never access process.env directly — always use src/01-Core/context/RuntimeConfig.ts
+- Never instantiate Stripe, Redis, or DB clients outside of src/05-Infra
+- Never modify src/05-Infra/persistence/schema.ts without a corresponding migration
+- Never call LLM APIs directly — always use the `llmClient` singleton from src/07-AI/llm/LLMClient.ts
+- Never add a POST/PUT/PATCH route without considering idempotency
+- Never process webhooks without webhookDeduplicationGuard or idempotencyStore.tryClaimKey()
+
+# IDEMPOTENCY AND WEBHOOK DEDUP
+
+Two mechanisms exist — use the right one for the context.
+
+For webhook routes, use `webhookDeduplicationGuard` from src/01-Core/middleware/WebhookDeduplicationGuard.ts:
+```ts
+import { webhookDeduplicationGuard } from '../../01-Core/middleware/WebhookDeduplicationGuard';
+router.post('/webhooks/:provider', webhookDeduplicationGuard(store, 'stripe'), handler);
+```
+
+For mutating API routes that accept an Idempotency-Key header, use `idempotencyMiddleware` from src/01-Core/middleware/IdempotencyMiddleware.ts:
+```ts
+import { idempotencyMiddleware } from '../../01-Core/middleware/IdempotencyMiddleware';
+router.post('/resource', idempotencyMiddleware({ store, namespace: 'billing.sub' }), handler);
+```
+
+Both use `tryClaimKey()` internally (atomic SET NX).
+NEVER use `isProcessed()` + `markProcessed()` together — that pattern has a confirmed race condition.
+
+# BACKGROUND JOBS
+
+- Use `RetryableJobRunner` (src/06-Background/safety/RetryableJobRunner.ts) for critical paths.
+  It provides exponential backoff with jitter, per-attempt timeouts, and dead-letter logging.
+- Raw `QueueWorker` is acceptable only for non-critical fire-and-forget tasks (e.g. audit logs).
+- New job payload types belong in a dedicated `*Jobs.ts` file in src/06-Background/jobs/
+  (follow the pattern in BillingJobs.ts). Add the interface to JobTypes.ts if shared.
+- Job handlers must return `{ ok: true }` on success or `{ ok: false, errorMessage }` on soft failure.
+  Throw `NonRetryableJobError` for bad-input errors that must not be retried.
+
+# AI FEATURE RULES
+
+- All LLM calls MUST go through the `llmClient` singleton exported from src/07-AI/llm/LLMClient.ts
+- Do not instantiate `LLMClient` directly in feature code — import and use the singleton
+- Every LLM call must include a `feature` field for cost attribution (e.g. `feature: 'report_gen'`)
+- Set `LLM_PROVIDER=stub` in .env for local development — no real API key needed
+- Never pass a custom `budgetTracker` to LLMClient outside of test code
+
+# CODING RULES
+
+- TypeScript strict mode only; no implicit `any` — explicit casts require a comment explaining why
+- Keep functions small and deterministic; prefer pure functions for business logic
+- Prefer dependency injection over module-level singletons in new code
+- Add tests for every policy change and every new service method
+- Use conventional commit style: `feat:`, `fix:`, `chore:`, `test:`, `refactor:`
+- 202 Accepted for async operations (job enqueued, webhook received)
+- 200 OK for synchronous reads and idempotent duplicate responses
+- 201 Created for synchronous resource creation
+- All new routes must have @openapi JSDoc annotations for Swagger auto-generation
+- Tests expected to run longer than 2s must declare an explicit timeout as the third argument:
+  `it('description', async () => { ... }, 15000)`
+
+# FAILURE SAFETY CHECKLIST (before submitting a PR)
+
+- [ ] Mutating routes use idempotencyMiddleware where a client Idempotency-Key header is expected
+- [ ] Webhook routes use webhookDeduplicationGuard or inline tryClaimKey() — never isProcessed() + markProcessed()
+- [ ] Critical background jobs use RetryableJobRunner, not raw QueueWorker
+- [ ] All LLM calls go through `llmClient` with a `feature` field set
+- [ ] No new process.env reads outside of src/01-Core/context/RuntimeConfig.ts
+- [ ] No new DB, Redis, or Stripe client instantiation outside of src/05-Infra
+- [ ] schema.ts changes have a matching statement in Migrator.ts syncTablesFallback()
+- [ ] New routes have @openapi annotations
