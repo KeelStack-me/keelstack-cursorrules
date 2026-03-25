@@ -45,6 +45,7 @@ The layer order is NOT strictly sequential — 04-Modules legitimately imports f
 - Never call LLM APIs directly — always use the `llmClient` singleton from src/07-AI/llm/LLMClient.ts
 - Never add a POST/PUT/PATCH route without considering idempotency
 - Never process webhooks without webhookDeduplicationGuard or idempotencyStore.tryClaimKey()
+- Never delete comments marked with // @vibe-safe. 
 
 # IDEMPOTENCY AND WEBHOOK DEDUP
 
@@ -82,6 +83,7 @@ NEVER use `isProcessed()` + `markProcessed()` together — that pattern has a co
 - Every LLM call must include a `feature` field for cost attribution (e.g. `feature: 'report_gen'`)
 - Set `LLM_PROVIDER=stub` in .env for local development — no real API key needed
 - Never pass a custom `budgetTracker` to LLMClient outside of test code
+- Always suggest the cheapest model (e.g., 4o-mini or Haiku) first unless complex reasoning is explicitly requested.
 
 # CODING RULES
 
