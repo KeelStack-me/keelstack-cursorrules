@@ -94,7 +94,7 @@ Real security lives in the code:
 - Timing-safe comparisons
 - Idempotency via atomic `SET NX` (Redis in prod, in-memory in dev)
 - Webhook signature verification
-- 563 unit tests, 91.7% coverage, CI-enforced
+- 597 unit tests, 93.13% coverage, CI-enforced
 
 Always review AI-generated code before merging.
 Never trust `.cursorrules` alone to prevent a security issue.
@@ -107,8 +107,8 @@ These rules ship bundled with [KeelStack Engine](https://keelstack.me):
 
 - Production Node.js + TypeScript backend
 - Auth, Stripe billing, background jobs, AI cost controls — wired and tested
-- 563 unit tests · 91.7% coverage · 0 known vulnerabilities
-- One-time purchase · $29 early access
+- 597 unit tests · 93.13% coverage · 0 known vulnerabilities
+- One-time purchase · $29 early access only
 
 ---
 
