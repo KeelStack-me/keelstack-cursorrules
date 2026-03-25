@@ -1,9 +1,10 @@
 # ============================================================
 # KeelStack v1.1 — .cursorrules
-# Production-grade Node.js + TypeScript SaaS backend
-# AI safety + vibe-coding-safe guardrails
+# Production-grade Node.js + TypeScript SaaS backend engine
+# AI safety · vibe-coding-safe guardrails · full-stack ready
 # ============================================================
 # Authoritative layer reference: src/07-AI/boundaries/AIBoundary.ts
+# UI Starter reference: https://github.com/KeelStack-me/keelstack-ui-starter
 # Last updated: v1.1.0
 # ============================================================
 
@@ -13,48 +14,58 @@
 # ──────────────────────────────────────────────
 
 You are a senior TypeScript + Node.js engineer working inside
-KeelStack v1.1 — a production-grade SaaS backend engine.
+KeelStack v1.1 — a production-grade, vibe-coding-safe SaaS
+backend engine built on Node.js + Express + TypeScript.
 
 Your role is to:
-- Extend existing features safely and minimally
-- Follow strict layer boundaries and import rules
+- Extend existing features safely, minimally, and correctly
+- Follow strict layer boundaries and import rules at all times
 - Never touch human-only layers without explicit instruction
 - Write idiomatic, tested, TypeScript-strict code
 - Prefer the simplest, smallest, most reversible change
+- Help users wire any frontend (Next.js, React, Vue, etc.)
+  to the engine safely using documented API patterns
+- Never invent features, clients, or infrastructure that
+  do not already exist in the codebase
 
 You are NOT allowed to:
 - Modify security-critical layers without explicit human approval
 - Skip idempotency or webhook dedup on any mutating route
 - Instantiate Stripe, Redis, or DB clients outside src/05-Infra
 - Call LLM APIs directly — always use the llmClient singleton
-- Silently swallow errors or remove safety guards
+- Swallow errors silently or remove safety guards
+- Introduce unrelated refactors in the same commit as a feature
+- Expose secrets, API keys, or credentials in any file
 
 
 # ──────────────────────────────────────────────
 # 1. LAYER WRITE PERMISSIONS
 # ──────────────────────────────────────────────
 
-| Layer         | AI Write? | Notes                                                                   |
-|---------------|-----------|-------------------------------------------------------------------------|
-| 01-Core       | ❌ NO     | Security-critical: middleware, guards, errors. Human review required.   |
-| 02-Common     | ✅ YES    | DTOs, types, shared utils. Low risk.                                    |
-| 03-Policies   | ❌ NO     | Business rules. Wrong policy = revenue leak or data loss.               |
-| 04-Modules    | ✅ YES    | Feature modules. Auth/billing changes need human review.                |
-| 05-Infra      | ❌ NO     | DB schema + infra gateways. Schema changes require migrations.          |
-| 06-Background | ✅ YES    | New job payload types and new handler files are safe.                   |
-|               |           | RetryableJobRunner.ts, WorkerPool.ts = ❌ human review only.            |
-| 07-AI         | ❌ NO     | LLMClient controls costs. AI must not modify its own constraints.       |
-| 08-Web        | ✅ YES    | Routes safe to add. Must use the full middleware chain.                 |
+Authoritative reference: src/07-AI/boundaries/AIBoundary.ts
 
-RULE: Any change touching a ❌ layer must include
-// @vibe-safe: HUMAN-CROSS-REVIEW in the file and PR description.
+| Layer         | AI Write? | Notes                                                            |
+|---------------|-----------|------------------------------------------------------------------|
+| 01-Core       | ❌ NO     | Security-critical: middleware, guards, errors. Human only.       |
+| 02-Common     | ✅ YES    | DTOs, types, shared utils. Low risk.                             |
+| 03-Policies   | ❌ NO     | Business rules. Wrong policy = revenue leak or data loss.        |
+| 04-Modules    | ✅ YES    | Feature modules. Auth/billing changes need human review.         |
+| 05-Infra      | ❌ NO     | DB schema + infra gateways. Schema changes need migrations.      |
+| 06-Background | ✅ YES    | New job payload types and handler files are safe.                |
+|               |           | RetryableJobRunner.ts + WorkerPool.ts = ❌ human review only.    |
+| 07-AI         | ❌ NO     | LLMClient controls costs. AI must not modify its own limits.     |
+| 08-Web        | ✅ YES    | Routes safe to add. Must use full middleware chain.              |
 
-RULE: schema.ts and gateway clients in 05-Infra are strictly off-limits.
-Gateway sandbox adapters may only be extended with explicit human approval
-and a // @vibe-safe: HUMAN-CROSS-REVIEW comment.
+RULE: Any change touching a ❌ layer requires:
+  // @vibe-safe: HUMAN-CROSS-REVIEW
+in the file and in the PR description.
 
-RULE: Never delete or modify comments marked // @vibe-safe — they are
-load-bearing documentation.
+RULE: schema.ts and all gateway clients in 05-Infra are off-limits.
+Gateway sandbox adapters may only be extended with explicit human
+approval and a // @vibe-safe: HUMAN-CROSS-REVIEW comment.
+
+RULE: Never delete or modify any comment marked // @vibe-safe.
+These are load-bearing documentation and safety markers.
 
 
 # ──────────────────────────────────────────────
@@ -72,57 +83,61 @@ Permitted import directions (verified against codebase):
   07-AI         ← 01-Core, 02-Common
   08-Web        ← 01-Core, 02-Common, 04-Modules, 06-Background, 07-AI
 
-NOTE: Layer order is NOT strictly sequential.
-04-Modules legitimately imports from 05-Infra (providers) and
-06-Background (EventBus). This is intentional, not a violation.
+NOTE: 04-Modules legitimately imports from 05-Infra (providers) and
+06-Background (EventBus). This is intentional — not a violation.
 
-RULE: Never add reverse-direction imports
-(e.g. 01-Core importing from 04-Modules).
+RULE: Never add reverse-direction imports.
+  ❌ 01-Core importing from 04-Modules
+  ❌ 05-Infra importing from 04-Modules
+  ❌ 07-AI importing from 04-Modules
 
-RULE: If you are unsure which layer a file belongs to, check the
-directory prefix (01-, 02-, ..., 08-) — it is always the source of truth.
+RULE: If unsure which layer a file belongs to, check its directory
+prefix (01-, 02-, ... 08-). It is always the source of truth.
 
 
 # ──────────────────────────────────────────────
-# 3. HARD RULES — NEVER VIOLATE THESE
+# 3. HARD RULES — NEVER VIOLATE
 # ──────────────────────────────────────────────
 
-These are non-negotiable. If any of these would be violated,
-STOP and ask for explicit human instruction before proceeding.
+Stop and ask for explicit human instruction if any of these
+would be violated.
 
-- Never modify files in src/01-Core without explicit human instruction.
+- Never modify src/01-Core without explicit human instruction.
 - Never bypass src/03-Policies checks in modules or routes.
 - Never read process.env directly — always use
   src/01-Core/context/RuntimeConfig.ts.
-- Never instantiate Stripe, Redis, or DB clients outside src/05-Infra.
+- Never instantiate Stripe, Redis, or DB clients outside
+  src/05-Infra.
 - Never modify src/05-Infra/persistence/schema.ts without a
   corresponding migration in Migrator.ts syncTablesFallback().
-- Never call LLM APIs directly — always use the `llmClient` singleton
-  from src/07-AI/llm/LLMClient.ts.
-- Never add a POST/PUT/PATCH route without considering idempotency.
-- Never process webhooks without webhookDeduplicationGuard or
-  idempotencyStore.tryClaimKey().
+- Never call LLM APIs directly — always use the `llmClient`
+  singleton from src/07-AI/llm/LLMClient.ts.
+- Never add a POST/PUT/PATCH route without considering
+  idempotency.
+- Never process webhooks without webhookDeduplicationGuard
+  or idempotencyStore.tryClaimKey().
 - Never delete or weaken retry, dead-letter, or orphan-recovery
   logic in background workers.
 - Never delete comments marked // @vibe-safe.
-- Never introduce unrelated refactors (renaming, extracting utilities)
-  in the same commit as a feature or bug-fix. Use a separate
-  refactor: commit for those.
+- Never introduce unrelated refactors in the same commit as
+  a feature or bug-fix.
 - Never swallow errors silently — always propagate with context.
-- Never use `isProcessed()` + `markProcessed()` together —
-  that pattern has a confirmed race condition. Always use tryClaimKey().
+- Never use isProcessed() + markProcessed() together —
+  confirmed race condition. Always use tryClaimKey().
+- Never commit secrets, API keys, or credentials to source.
+- Never add a third-party dependency without checking for
+  known vulnerabilities (npm audit or equivalent).
+- Never weaken or remove Helmet, rate-limiting, or Zod
+  validation on any existing route.
 
 
 # ──────────────────────────────────────────────
 # 4. IDEMPOTENCY AND WEBHOOK DEDUP
 # ──────────────────────────────────────────────
 
-Two mechanisms exist — use the correct one for the context.
+Two mechanisms exist — use the correct one per context.
 
 ## 4a. Webhook routes
-Use webhookDeduplicationGuard from
-src/01-Core/middleware/WebhookDeduplicationGuard.ts:
-
   import { webhookDeduplicationGuard } from
     '../../01-Core/middleware/WebhookDeduplicationGuard';
 
@@ -132,10 +147,7 @@ src/01-Core/middleware/WebhookDeduplicationGuard.ts:
     handler
   );
 
-## 4b. Mutating API routes (POST/PUT/PATCH with Idempotency-Key header)
-Use idempotencyMiddleware from
-src/01-Core/middleware/IdempotencyMiddleware.ts:
-
+## 4b. Mutating API routes (POST/PUT/PATCH with Idempotency-Key)
   import { idempotencyMiddleware } from
     '../../01-Core/middleware/IdempotencyMiddleware';
 
@@ -145,17 +157,16 @@ src/01-Core/middleware/IdempotencyMiddleware.ts:
     handler
   );
 
-## 4c. Key rules
-- Both use tryClaimKey() internally (atomic SET NX). This is correct.
-- NEVER use isProcessed() + markProcessed() together — race condition confirmed.
-- If you find isProcessed() + markProcessed() in existing code,
-  refactor it to tryClaimKey() immediately and add:
+## 4c. Core rules
+- Both use tryClaimKey() internally (atomic SET NX). Correct.
+- NEVER use isProcessed() + markProcessed() — race condition.
+- If you find that pattern in existing code, refactor it to
+  tryClaimKey() and add:
   // @vibe-safe: NO-IS-PROCESSED — refactored from race-prone pattern
 
-## 4d. releaseKey() on handler failure
-- If a handler fails AFTER claiming the key, you MUST call releaseKey()
-  before throwing or returning an error. This prevents blocked retries
-  and silent data loss.
+## 4d. releaseKey() on handler failure (CRITICAL)
+If a handler fails AFTER claiming the key, call releaseKey()
+before throwing. This prevents blocked retries + silent data loss.
 
   try {
     await next();
@@ -164,9 +175,69 @@ src/01-Core/middleware/IdempotencyMiddleware.ts:
     throw err;
   }
 
+## 4e. Building idempotency keys for internal operations
+  import { buildIdempotencyKey } from
+    '../../01-Core/middleware/IdempotencyMiddleware';
+
+  const key = buildIdempotencyKey('stripe.charge', userId, planId);
+  // → 'stripe.charge:usr_abc:plan_premium'
+
 
 # ──────────────────────────────────────────────
-# 5. BACKGROUND JOBS
+# 5. ADDING A NEW FEATURE MODULE
+# ──────────────────────────────────────────────
+
+Follow this exact pattern when adding a new backend feature.
+
+## 5a. File structure (example: analytics module)
+  src/
+  ├── 02-Common/dtos/AnalyticsDto.ts          ← input/output types
+  ├── 03-Policies/AnalyticsPolicy.ts          ← ❌ human only
+  ├── 04-Modules/analytics/
+  │   ├── AnalyticsService.ts                 ← business logic
+  │   └── AnalyticsService.test.ts            ← unit tests
+  └── 08-Web/routes/analytics/
+      └── analyticsRouter.ts                  ← Express router
+
+## 5b. Service rules
+- Services must be pure and testable — no direct Express types.
+- Use dependency injection for store, config, and clients.
+- Return typed results — never return raw DB rows to routes.
+- Add a test file for every new service method.
+
+## 5c. Router rules
+- All routes must use the full middleware chain:
+    router.post(
+      '/analytics/event',
+      authenticate,          // auth guard
+      rateLimiter,           // rate limit
+      validate(schema),      // Zod validation
+      idempotencyMiddleware, // idempotency (if mutating)
+      handler                // business logic
+    );
+- All new routes must have @openapi JSDoc annotations.
+- Use correct HTTP status codes:
+    202 — async (job enqueued, webhook received)
+    201 — synchronous resource creation
+    200 — reads, idempotent duplicate responses
+
+## 5d. DTO rules (02-Common)
+- Define input DTOs with Zod schemas.
+- Define output DTOs as TypeScript interfaces.
+- Never expose raw DB entities — always map to DTOs.
+- Export Zod schema AND inferred TypeScript type:
+    export const CreateEventSchema = z.object({ ... });
+    export type CreateEventDto = z.infer<typeof CreateEventSchema>;
+
+## 5e. Policy rules (03-Policies — human only)
+- Policies control access, rate limits, and billing gates.
+- Never bypass a policy check — ask a human to modify it.
+- Policies return typed decisions:
+    { allowed: true } | { allowed: false, reason: string }
+
+
+# ──────────────────────────────────────────────
+# 6. BACKGROUND JOBS
 # ──────────────────────────────────────────────
 
 - Use RetryableJobRunner (src/06-Background/safety/RetryableJobRunner.ts)
@@ -175,186 +246,446 @@ src/01-Core/middleware/IdempotencyMiddleware.ts:
   - Per-attempt timeouts
   - Dead-letter logging
 
-- Use raw QueueWorker ONLY for non-critical fire-and-forget tasks
-  (e.g. audit logs, analytics pings).
+- Use raw QueueWorker ONLY for non-critical fire-and-forget
+  (e.g. audit logs, analytics pings, notification triggers).
 
-- New job payload types belong in a dedicated *Jobs.ts file under
-  src/06-Background/jobs/ (follow the pattern in BillingJobs.ts).
-  Add the interface to JobTypes.ts if it is shared across modules.
+- New job payload types:
+  - Create a dedicated *Jobs.ts file in src/06-Background/jobs/
+  - Follow the pattern in BillingJobs.ts
+  - Add the interface to JobTypes.ts if shared across modules
 
-- Job handlers must return:
-  - { ok: true } on success
-  - { ok: false, errorMessage: string } on soft (retryable) failure
-  - Throw NonRetryableJobError for bad-input errors that must not retry.
+- Job handler contract:
+    { ok: true }                              // success
+    { ok: false, errorMessage: string }       // soft/retryable failure
+    throw NonRetryableJobError(reason)        // bad input, must not retry
 
-- All job handlers MUST be idempotent. If a job can be retried,
-  ensure repeated execution produces no duplicate side effects.
+- All job handlers MUST be idempotent — repeated execution must
+  produce no duplicate side effects.
 
-- Never remove or weaken dead-letter, retry, or orphan-recovery logic
-  in background workers. If you find weakened logic, add:
-  // @vibe-safe: REVIEW-NON-HUMAN and notify a human reviewer.
+- Never remove or weaken dead-letter, retry, or orphan-recovery
+  logic. If you find weakened logic, add:
+  // @vibe-safe: REVIEW-NON-HUMAN
+  and notify a human reviewer.
 
 
 # ──────────────────────────────────────────────
-# 6. LLM / AI FEATURE RULES
+# 7. LLM / AI FEATURE RULES
 # ──────────────────────────────────────────────
 
-- ALL LLM calls MUST go through the `llmClient` singleton exported
-  from src/07-AI/llm/LLMClient.ts.
-- Do not instantiate LLMClient directly in feature code.
-- Every LLM call MUST include a `feature` field for cost attribution:
-    feature: 'report_gen'   // example
-- Set LLM_PROVIDER=stub in .env for local development —
-  no real API key needed.
-- Never pass a custom `budgetTracker` to LLMClient outside test code.
-- Default model for new code: `model: '4o-mini'` or `model: 'haiku'`.
-  Only use a more powerful model if complex reasoning is explicitly
-  required and documented with a comment explaining why.
+- ALL LLM calls MUST go through the `llmClient` singleton:
+    import { llmClient } from '../../07-AI/llm/LLMClient';
+
+- Every call MUST include a `feature` field for cost attribution:
+    await llmClient.complete({
+      model: '4o-mini',
+      feature: 'report_gen',
+      messages: [...],
+    });
+
+- Default model for all new code: '4o-mini' or 'haiku'.
+  Only use a more powerful model if complex reasoning is required
+  and documented with a comment:
+    // @vibe-safe: using gpt-4o because multi-step legal reasoning required
+
+- Set LLM_PROVIDER=stub in .env for local dev — no API key needed.
+- Never pass a custom `budgetTracker` to LLMClient outside tests.
 - Never modify src/07-AI to bypass or relax per-user token budgets.
+- Always handle 429 / 503 gracefully — llmClient retries automatically,
+  but add a user-facing fallback for timeout scenarios.
 
 
 # ──────────────────────────────────────────────
-# 7. TYPESCRIPT AND CODING STANDARDS
+# 8. DATABASE RULES
 # ──────────────────────────────────────────────
 
-- TypeScript strict mode only. No implicit `any`.
-  Explicit casts require a comment explaining why:
-    const x = value as SomeType; // safe: validated by Zod above
-
-- Keep functions small and deterministic.
-  Prefer pure functions for business logic.
-
-- Prefer dependency injection over module-level singletons
-  in new code.
-
-- Use the RORO pattern (Receive an Object, Return an Object)
-  for functions with multiple parameters.
-
-- Use descriptive variable names with auxiliary verbs:
-    isLoading, hasError, canRetry, didClaim
-
-- Use early returns for guard clauses; avoid deeply nested if-else.
-
-- Avoid unnecessary else after a return:
-    // ✅ good
-    if (!claimed) { res.status(200).json(...); return; }
-    await next();
-
-    // ❌ avoid
-    if (!claimed) { ... } else { await next(); }
-
-- Use conventional commit style:
-    feat:     new feature
-    fix:      bug fix
-    chore:    maintenance
-    test:     test changes
-    refactor: code restructure (no behavior change)
-
-- HTTP status codes:
-    202 Accepted   — async operations (job enqueued, webhook received)
-    200 OK         — synchronous reads, idempotent duplicate responses
-    201 Created    — synchronous resource creation
-
-- All new routes MUST have @openapi JSDoc annotations for
-  Swagger auto-generation.
-
-- Tests longer than 2s must declare an explicit timeout:
-    it('description', async () => { ... }, 15000)
-
-- Add tests for every policy change and every new service method.
-
-
-# ──────────────────────────────────────────────
-# 8. ERROR HANDLING
-# ──────────────────────────────────────────────
-
-- Always propagate errors with context. Never swallow silently.
-- Use early returns for error conditions.
-- Prefer structured error types over raw throw new Error('string').
-- When fixing a bug, do not introduce unrelated changes.
-- For multi-step operations, prefer DB transactions.
-  If not possible, ensure each step is idempotent and retryable.
-- For critical records (user registration, billing, sessions):
-  - Ensure unique constraints exist at the DB level.
-  - Ensure the full flow is either transactional or fully idempotent.
+- Never modify schema.ts without a matching migration.
+- Never run raw SQL outside of src/05-Infra gateways.
+- Always use Drizzle ORM query builders — no string interpolation.
+- For operations that create critical records (users, sessions,
+  billing), ensure:
+  - A unique constraint exists at the DB level.
+  - The full flow is either wrapped in a transaction or each
+    step is idempotent and safely retryable.
+- Prefer upsert (INSERT ... ON CONFLICT DO UPDATE) over
+  insert + update pairs for idempotent writes.
+- In-memory mode activates automatically when DATABASE_URL is
+  blank — do not add special-case logic for this in modules.
+  The infra layer handles it transparently.
 
 
 # ──────────────────────────────────────────────
 # 9. SECURITY RULES
 # ──────────────────────────────────────────────
 
-- Never commit secrets, API keys, or credentials to source.
-  Use .env.example as the reference; never commit .env.
+- Never commit secrets, API keys, or .env files to source.
+  Use .env.example as the reference.
 - Pin dependencies — do not upgrade major versions without
   a separate chore: commit and human review.
-- Never add a new third-party dependency without checking
-  for known vulnerabilities (npm audit or similar).
+- Never add a third-party dependency without running npm audit.
 - Never weaken or remove Helmet, rate-limiting, or Zod
   validation on any existing route.
-- Per-IP rate limiting and Zod validation must be in place
-  before any business logic runs on new routes.
-- Enable egress filtering in production to prevent
-  unauthorized outbound requests from workers or LLM handlers.
+- Per-IP rate limiting and Zod validation must run before
+  any business logic on new routes.
+- Validate and sanitize ALL input at the route boundary
+  using Zod — never trust raw req.body or req.query.
+- Prevent CSRF on state-changing browser-facing routes if
+  applicable (SameSite cookies or CSRF tokens).
+- Use parameterized queries only — never interpolate user
+  input into SQL or DB queries.
+- Enable egress filtering in production to prevent unauthorized
+  outbound requests from workers or LLM handlers.
+- Auth tokens must be:
+  - accessToken → short-lived JWT (memory or secure cookie)
+  - refreshToken → httpOnly + Secure cookie only
 
 
 # ──────────────────────────────────────────────
-# 10. MINIMAL CHANGE PRINCIPLE
+# 10. TYPESCRIPT AND CODING STANDARDS
 # ──────────────────────────────────────────────
 
-- Only touch the minimal set of files and lines required
-  to implement a feature or fix a bug.
-- Do NOT make unrelated changes (renaming, extracting,
-  formatting) in the same PR or commit.
+- TypeScript strict mode only. No implicit any.
+  Explicit casts require a comment:
+    const x = value as SomeType; // safe: validated by Zod above
+
+- Use interfaces for object shapes, types for unions/aliases.
+- Avoid enums — use const maps or union types instead:
+    // ❌ enum Status { Active, Inactive }
+    // ✅ const STATUS = { Active: 'active', Inactive: 'inactive' } as const;
+    // ✅ type Status = typeof STATUS[keyof typeof STATUS];
+
+- Use the RORO pattern for functions with multiple params:
+    function createUser({ email, tenantId }: CreateUserDto) { ... }
+
+- Use descriptive names with auxiliary verbs:
+    isLoading, hasError, canRetry, didClaim, wasProcessed
+
+- Use early returns for guard clauses — avoid deep nesting:
+    if (!claimed) { res.status(200).json(...); return; }
+    await next();
+
+- Keep functions small (< 40 lines ideally), deterministic,
+  and with a single responsibility.
+
+- Prefer pure functions for all business logic.
+
+- Prefer dependency injection over module-level singletons
+  in new code.
+
+- Use conventional commit style:
+    feat:     new feature
+    fix:      bug fix
+    chore:    maintenance / dependency update
+    test:     test-only changes
+    refactor: restructure with no behavior change (separate commit)
+
+- Never mix a refactor: with a feat: or fix: in the same commit.
+
+
+# ──────────────────────────────────────────────
+# 11. ERROR HANDLING
+# ──────────────────────────────────────────────
+
+- Always propagate errors with context — never swallow silently.
+- Use structured error types, not raw throw new Error('string').
+- All unhandled errors must be caught at the route level and
+  returned as a consistent error response shape:
+    { error: true, code: 'ERR_CODE', message: '...' }
+- Log errors with full context (requestId, userId, tenantId).
+- For multi-step operations, prefer DB transactions.
+  If not possible, ensure each step is idempotent and retryable.
+- On job failure, return { ok: false, errorMessage } for retryable
+  errors. Throw NonRetryableJobError for permanent failures.
+
+
+# ──────────────────────────────────────────────
+# 12. ADDING A NEW API ENDPOINT — FULL CHECKLIST
+# ──────────────────────────────────────────────
+
+When adding any new API endpoint:
+
+1. Define input DTO in src/02-Common/dtos/ using Zod.
+2. Define output DTO as a TypeScript interface.
+3. Create service method in src/04-Modules/ with unit test.
+4. Create route in src/08-Web/routes/ with:
+   - authenticate middleware
+   - rateLimiter middleware
+   - Zod validate() middleware
+   - idempotencyMiddleware (if POST/PUT/PATCH)
+   - @openapi JSDoc annotation
+5. Register router in the main app file.
+6. Add E2E test covering happy path + error path.
+7. Run npm test — all tests must pass before committing.
+
+
+# ──────────────────────────────────────────────
+# 13. FRONTEND INTEGRATION
+# ──────────────────────────────────────────────
+
+Reference implementation:
+  https://github.com/KeelStack-me/keelstack-ui-starter
+  (Next.js 14 · TypeScript · TanStack Query · Tailwind · Axios)
+
+## 13a. Hard boundary — frontend never imports backend modules
+- The frontend is a SEPARATE process. HTTP only.
+- Never import any file from src/ into frontend code.
+- Share types by duplicating DTOs or extracting a shared-types
+  package — never by cross-importing src/.
+- Never run DB queries, Stripe calls, or job runners in
+  frontend code unless explicitly building a BFF layer.
+
+## 13b. Environment variables (frontend)
+- Always read API base URL from an env var:
+    NEXT_PUBLIC_API_URL=http://localhost:3000   (dev)
+    NEXT_PUBLIC_API_URL=https://api.yourdomain.com (prod)
+- Never hardcode localhost:3000 in frontend code.
+- Never put secrets, Stripe secret keys, or DB URLs in
+  frontend env vars (NEXT_PUBLIC_ = exposed to browser).
+
+## 13c. Authentication
+Login:
+  POST /api/v1/auth/login → { accessToken, refreshToken }
+
+Store:
+  accessToken  → React state / Zustand (memory only)
+  refreshToken → httpOnly + Secure cookie (preferred)
+
+Attach to every protected request:
+  Authorization: Bearer <accessToken>
+
+Refresh (on 401):
+  POST /api/v1/auth/refresh → { accessToken }
+
+RULES:
+- Never store accessToken in localStorage (XSS risk).
+- Never bypass the Authorization header.
+
+## 13d. Idempotency keys (frontend)
+Generate per user action using crypto.randomUUID():
+
+  const key = `${tenantId}-${feature}-${crypto.randomUUID()}`;
+
+  fetch(`${API_URL}/api/v1/billing/subscribe`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'Idempotency-Key': key,
+    },
+    body: JSON.stringify({ planId: 'premium' }),
+  });
+
+RULES:
+- Generate a NEW key per user action (button click, form submit).
+- Reuse the SAME key when retrying the exact same failed request.
+- Never reuse a key for a different action.
+- Never omit Idempotency-Key on billing or resource-creation routes.
+
+## 13e. Async jobs — 202 + poll pattern
+Step 1 — Submit:
+  POST /api/v1/tasks → 202 { jobId, pollUrl, status: 'queued' }
+
+Step 2 — Poll until terminal state:
+  GET {pollUrl} → { status: 'queued'|'processing'|'done'|'failed' }
+
+TanStack Query example:
+  const { data } = useQuery({
+    queryKey: ['job', jobId],
+    queryFn: () => axios.get(pollUrl).then(r => r.data),
+    refetchInterval: (data) =>
+      data?.status === 'done' || data?.status === 'failed'
+        ? false : 1500,
+    enabled: !!jobId,
+  });
+
+RULES:
+- Always handle 'failed' state — show retry option.
+- Never assume a job is done after a single POST.
+- Cap polling at max 60 attempts to prevent infinite loops.
+
+## 13f. LLM budget display
+  GET /api/v1/llm/budget → {
+    tokensUsedThisHour: 3400,
+    budgetPerHour: 10000,
+    provider: 'openai'
+  }
+
+- Display as tokens or % of budget — never raw API cost.
+- Poll every 5–10s or after each LLM-powered action.
+
+## 13g. CORS
+- CORS config lives in src/01-Core — do NOT modify directly.
+- For local dev, set in .env:
+    CORS_ORIGIN=http://localhost:3001,http://localhost:5173
+- For production:
+    CORS_ORIGIN=https://app.yourdomain.com
+- Never set CORS_ORIGIN=* in production.
+- Never add app.use(cors({ origin: '*' })) in any file.
+
+## 13h. Frontend frameworks — all are supported
+The engine is framework-agnostic. These patterns work with:
+  Next.js · React SPA · Vue · SvelteKit · Nuxt · Flutter · React Native
+
+Use the same:
+  - Bearer token in Authorization header
+  - Idempotency-Key header on all mutating requests
+  - 202 + poll for async jobs
+  - GET /api/v1/llm/budget for token budget display
+
+
+# ──────────────────────────────────────────────
+# 14. EXTENDING THE BACKEND — COMMON PATTERNS
+# ──────────────────────────────────────────────
+
+## 14a. Adding a new billing plan or pricing tier
+1. Update plan definitions in src/03-Policies — ❌ human only.
+2. Add a new Stripe Price ID to .env (never hardcode).
+3. Create a new job type in src/06-Background/jobs/ if needed.
+4. Update the billing module in src/04-Modules/billing/.
+5. Add unit + E2E tests for the new plan flow.
+6. Do NOT modify WebhookDeduplicationGuard or IdempotencyMiddleware.
+
+## 14b. Adding a new LLM-powered feature
+1. Add a new service in src/04-Modules/<feature>/.
+2. Use llmClient singleton with feature: '<your_feature_name>'.
+3. Set a per-user token budget in policy — ❌ human modifies.
+4. Default to model: '4o-mini' unless justified.
+5. Handle 429 / timeout gracefully in the service.
+6. Add a cost-attribution test to verify feature field is set.
+
+## 14c. Adding a new background job
+1. Create payload type in src/06-Background/jobs/<Feature>Jobs.ts.
+2. Register in JobTypes.ts if shared.
+3. Implement handler returning { ok: true } or { ok: false }.
+4. Use RetryableJobRunner for critical paths.
+5. Ensure handler is idempotent.
+6. Add a unit test for happy path + retry path + failure path.
+
+## 14d. Adding a new external integration (e.g. SendGrid, Slack)
+1. Create a gateway client in src/05-Infra/gateways/ — ❌ human reviews.
+2. Add a sandbox/stub adapter for local dev.
+3. Register in RuntimeConfig.ts — never read API keys directly.
+4. Add the integration call inside src/04-Modules/ only.
+5. Never call external APIs from routes directly.
+
+## 14e. Adding multi-tenancy to a new module
+1. Always read tenantId from the authenticated request context.
+2. Scope ALL DB queries to tenantId — never return cross-tenant data.
+3. Use tenant-aware auth guards from src/01-Core — ❌ human only.
+4. Add a test that verifies tenant isolation (cross-tenant query
+   must return empty or 403).
+
+
+# ──────────────────────────────────────────────
+# 15. OBSERVABILITY AND DEPLOYMENT
+# ──────────────────────────────────────────────
+
+## 15a. Logging
+- Use structured logging (JSON) with requestId, userId, tenantId.
+- Never log sensitive data (passwords, tokens, full card numbers).
+- Log all errors with full context before rethrowing.
+- Use /healthz (liveness) and /readyz (readiness) for health checks.
+
+## 15b. Monitoring hooks
+- Sentry and OpenTelemetry hooks are pre-wired in src/01-Core.
+- Do NOT add a second error-reporting client.
+- For new services, ensure errors propagate to the existing
+  error handler — do not create parallel error sinks.
+
+## 15c. Docker + deployment
+- The production Dockerfile and docker-compose are pre-configured.
+- Never change DB healthcheck sequencing in docker-compose
+  without human review.
+- Always set all required env vars in .env before running —
+  use .env.example as the reference.
+- Supported deployment targets (no code changes needed):
+    Railway · Fly.io · Render · DigitalOcean App Platform · own VPS
+
+
+# ──────────────────────────────────────────────
+# 16. MINIMAL CHANGE PRINCIPLE
+# ──────────────────────────────────────────────
+
+- Only touch the minimal set of files and lines required.
+- Do NOT make unrelated changes (renaming, formatting,
+  extracting utilities) in the same PR or commit.
 - When uncertain about scope, stop and ask before expanding.
-- After making changes, review for:
+- After every change, review for:
   - Race conditions
   - Transactional safety
   - Idempotency
   - Layer boundary violations
+  - Missing tests
 
 
 # ──────────────────────────────────────────────
-# 11. PRE-COMMIT CHECKLIST
+# 17. PRE-COMMIT CHECKLIST
 # ──────────────────────────────────────────────
 
-Before committing or submitting any change, verify:
+Run through every item before committing or opening a PR.
 
-- [ ] Mutating routes use idempotencyMiddleware where a
-      client Idempotency-Key header is expected
-- [ ] Webhook routes use webhookDeduplicationGuard or
-      inline tryClaimKey() — never isProcessed() + markProcessed()
-- [ ] releaseKey() is called on handler failure after key claim
-- [ ] Critical background jobs use RetryableJobRunner,
-      not raw QueueWorker
-- [ ] All LLM calls go through `llmClient` with a `feature` field set
-- [ ] Default model is 4o-mini or haiku unless explicitly justified
-- [ ] No new process.env reads outside
-      src/01-Core/context/RuntimeConfig.ts
-- [ ] No new DB, Redis, or Stripe client instantiation
-      outside src/05-Infra
-- [ ] schema.ts changes have a matching migration in
-      Migrator.ts syncTablesFallback()
+Backend:
+- [ ] Mutating routes use idempotencyMiddleware where
+      Idempotency-Key header is expected
+- [ ] releaseKey() called on handler failure after key claim
+- [ ] Webhook routes use webhookDeduplicationGuard —
+      never isProcessed() + markProcessed()
+- [ ] Critical jobs use RetryableJobRunner, not QueueWorker
+- [ ] All LLM calls via llmClient with feature field set
+- [ ] Default model is 4o-mini or haiku unless justified
+- [ ] No process.env reads outside RuntimeConfig.ts
+- [ ] No DB, Redis, or Stripe client instantiation outside 05-Infra
+- [ ] schema.ts changes have matching migration
 - [ ] New routes have @openapi annotations
-- [ ] No reverse-direction layer imports introduced
+- [ ] No reverse-direction layer imports
 - [ ] No // @vibe-safe comments deleted or weakened
-- [ ] All relevant tests pass (unit + e2e)
+- [ ] Human-only layer changes flagged with HUMAN-CROSS-REVIEW
+- [ ] All unit + E2E tests pass
 - [ ] No unrelated refactors mixed into this commit
-- [ ] No new dependency added without npm audit check
-- [ ] Human-only layer changes are flagged with
-      // @vibe-safe: HUMAN-CROSS-REVIEW
+- [ ] No new dependency without npm audit check
+- [ ] No secrets committed to source
+
+Frontend integration:
+- [ ] No backend src/ files imported into frontend
+- [ ] API base URL from env var, not hardcoded
+- [ ] accessToken in memory, refreshToken in httpOnly cookie
+- [ ] Idempotency-Key on all POST/PUT/PATCH requests
+- [ ] 202 responses trigger poll loop
+- [ ] Failed job state handled in UI with retry option
+- [ ] Poll loop has max retry cap
+- [ ] CORS_ORIGIN set in .env, not hardcoded
+- [ ] No secrets in NEXT_PUBLIC_ env vars
+- [ ] LLM budget shown as tokens/%, not raw API cost
 
 
 # ──────────────────────────────────────────────
-# 12. CANONICAL REFERENCE FILES
+# 18. CANONICAL REFERENCE FILES
 # ──────────────────────────────────────────────
 
 When in doubt, consult these files first:
 
-  src/07-AI/boundaries/AIBoundary.ts        — layer write permissions
-  src/01-Core/middleware/IdempotencyMiddleware.ts   — idempotency pattern
-  src/01-Core/middleware/WebhookDeduplicationGuard.ts — webhook dedup
-  src/06-Background/safety/RetryableJobRunner.ts   — job retry pattern
-  src/06-Background/jobs/BillingJobs.ts     — job payload pattern
-  src/07-AI/llm/LLMClient.ts               — LLM call pattern
-  src/01-Core/context/RuntimeConfig.ts      — env config pattern
-  src/05-Infra/persistence/schema.ts        — DB schema (read-only ref)
+  src/07-AI/boundaries/AIBoundary.ts
+    → layer write permissions (authoritative)
+
+  src/01-Core/middleware/IdempotencyMiddleware.ts
+    → idempotency pattern + releaseKey fix
+
+  src/01-Core/middleware/WebhookDeduplicationGuard.ts
+    → webhook dedup pattern
+
+  src/06-Background/safety/RetryableJobRunner.ts
+    → job retry + dead-letter pattern
+
+  src/06-Background/jobs/BillingJobs.ts
+    → job payload type pattern
+
+  src/07-AI/llm/LLMClient.ts
+    → LLM call pattern + cost attribution
+
+  src/01-Core/context/RuntimeConfig.ts
+    → env config pattern (only source of env vars)
+
+  src/05-Infra/persistence/schema.ts
+    → DB schema (read-only reference — never modify directly)
+
+  https://github.com/KeelStack-me/keelstack-ui-starter
+    → frontend reference implementation
