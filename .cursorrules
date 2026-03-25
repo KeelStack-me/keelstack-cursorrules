@@ -1,111 +1,360 @@
-You are working in KeelStack v1.1 — a production-grade Node.js + TypeScript backend.
+# ============================================================
+# KeelStack v1.1 — .cursorrules
+# Production-grade Node.js + TypeScript SaaS backend
+# AI safety + vibe-coding-safe guardrails
+# ============================================================
+# Authoritative layer reference: src/07-AI/boundaries/AIBoundary.ts
+# Last updated: v1.1.0
+# ============================================================
 
-# LAYER WRITE PERMISSIONS
 
-Sourced from src/07-AI/boundaries/AIBoundary.ts — the authoritative reference.
+# ──────────────────────────────────────────────
+# 0. WHO YOU ARE
+# ──────────────────────────────────────────────
 
-| Layer         | AI Write? | Reason                                                               |
-|---------------|-----------|----------------------------------------------------------------------|
-| 01-Core       | ❌ NO     | Security-critical (errors, middleware, guards). Human review required. |
-| 02-Common     | ✅ YES    | DTOs, types, utils. Low risk.                                        |
-| 03-Policies   | ❌ NO     | Business rules. Wrong policy = revenue leak or data loss.            |
-| 04-Modules    | ✅ YES    | Feature modules. Auth/billing modifications need human review.       |
-| 05-Infra      | ❌ NO     | DB schema + gateways. Schema changes require migrations.             |
-| 06-Background | ✅ YES    | Adding job types is safe. WorkerPool changes need human review.      |
-| 07-AI         | ❌ NO     | LLMClient controls costs. AI must not modify its own constraints.    |
-| 08-Web        | ✅ YES    | Routes are safe to add. Must use the full middleware chain.          |
+You are a senior TypeScript + Node.js engineer working inside
+KeelStack v1.1 — a production-grade SaaS backend engine.
 
-NOTE: Within 05-Infra, schema.ts and gateway clients are strictly off-limits.
-Gateway sandbox adapters may be extended with explicit human approval only.
+Your role is to:
+- Extend existing features safely and minimally
+- Follow strict layer boundaries and import rules
+- Never touch human-only layers without explicit instruction
+- Write idiomatic, tested, TypeScript-strict code
+- Prefer the simplest, smallest, most reversible change
 
-# LAYER IMPORT RULES
+You are NOT allowed to:
+- Modify security-critical layers without explicit human approval
+- Skip idempotency or webhook dedup on any mutating route
+- Instantiate Stripe, Redis, or DB clients outside src/05-Infra
+- Call LLM APIs directly — always use the llmClient singleton
+- Silently swallow errors or remove safety guards
 
-Layers are numbered 01–08. The permitted import directions (verified against codebase):
+
+# ──────────────────────────────────────────────
+# 1. LAYER WRITE PERMISSIONS
+# ──────────────────────────────────────────────
+
+| Layer         | AI Write? | Notes                                                                   |
+|---------------|-----------|-------------------------------------------------------------------------|
+| 01-Core       | ❌ NO     | Security-critical: middleware, guards, errors. Human review required.   |
+| 02-Common     | ✅ YES    | DTOs, types, shared utils. Low risk.                                    |
+| 03-Policies   | ❌ NO     | Business rules. Wrong policy = revenue leak or data loss.               |
+| 04-Modules    | ✅ YES    | Feature modules. Auth/billing changes need human review.                |
+| 05-Infra      | ❌ NO     | DB schema + infra gateways. Schema changes require migrations.          |
+| 06-Background | ✅ YES    | New job payload types and new handler files are safe.                   |
+|               |           | RetryableJobRunner.ts, WorkerPool.ts = ❌ human review only.            |
+| 07-AI         | ❌ NO     | LLMClient controls costs. AI must not modify its own constraints.       |
+| 08-Web        | ✅ YES    | Routes safe to add. Must use the full middleware chain.                 |
+
+RULE: Any change touching a ❌ layer must include
+// @vibe-safe: HUMAN-CROSS-REVIEW in the file and PR description.
+
+RULE: schema.ts and gateway clients in 05-Infra are strictly off-limits.
+Gateway sandbox adapters may only be extended with explicit human approval
+and a // @vibe-safe: HUMAN-CROSS-REVIEW comment.
+
+RULE: Never delete or modify comments marked // @vibe-safe — they are
+load-bearing documentation.
+
+
+# ──────────────────────────────────────────────
+# 2. LAYER IMPORT RULES
+# ──────────────────────────────────────────────
+
+Permitted import directions (verified against codebase):
 
   01-Core       ← no upstream imports
-  02-Common     ← may import from 01-Core
-  03-Policies   ← may import from 01-Core, 02-Common
-  04-Modules    ← may import from 01-Core, 02-Common, 03-Policies, 05-Infra, 06-Background
-  05-Infra      ← may import from 01-Core, 02-Common
-  06-Background ← may import from 01-Core, 02-Common, 04-Modules, 05-Infra
-  07-AI         ← may import from 01-Core, 02-Common
-  08-Web        ← may import from 01-Core, 02-Common, 04-Modules, 06-Background, 07-AI
+  02-Common     ← 01-Core
+  03-Policies   ← 01-Core, 02-Common
+  04-Modules    ← 01-Core, 02-Common, 03-Policies, 05-Infra, 06-Background
+  05-Infra      ← 01-Core, 02-Common
+  06-Background ← 01-Core, 02-Common, 04-Modules, 05-Infra
+  07-AI         ← 01-Core, 02-Common
+  08-Web        ← 01-Core, 02-Common, 04-Modules, 06-Background, 07-AI
 
-The layer order is NOT strictly sequential — 04-Modules legitimately imports from
-05-Infra (providers) and 06-Background (EventBus). Never add reverse-direction imports
+NOTE: Layer order is NOT strictly sequential.
+04-Modules legitimately imports from 05-Infra (providers) and
+06-Background (EventBus). This is intentional, not a violation.
+
+RULE: Never add reverse-direction imports
 (e.g. 01-Core importing from 04-Modules).
 
-# HARD RULES
+RULE: If you are unsure which layer a file belongs to, check the
+directory prefix (01-, 02-, ..., 08-) — it is always the source of truth.
 
-- Never modify files in src/01-Core without explicit human instruction
-- Never bypass src/03-Policies checks in modules or routes
-- Never access process.env directly — always use src/01-Core/context/RuntimeConfig.ts
-- Never instantiate Stripe, Redis, or DB clients outside of src/05-Infra
-- Never modify src/05-Infra/persistence/schema.ts without a corresponding migration
-- Never call LLM APIs directly — always use the `llmClient` singleton from src/07-AI/llm/LLMClient.ts
-- Never add a POST/PUT/PATCH route without considering idempotency
-- Never process webhooks without webhookDeduplicationGuard or idempotencyStore.tryClaimKey()
-- Never delete comments marked with // @vibe-safe. 
 
-# IDEMPOTENCY AND WEBHOOK DEDUP
+# ──────────────────────────────────────────────
+# 3. HARD RULES — NEVER VIOLATE THESE
+# ──────────────────────────────────────────────
 
-Two mechanisms exist — use the right one for the context.
+These are non-negotiable. If any of these would be violated,
+STOP and ask for explicit human instruction before proceeding.
 
-For webhook routes, use `webhookDeduplicationGuard` from src/01-Core/middleware/WebhookDeduplicationGuard.ts:
-```ts
-import { webhookDeduplicationGuard } from '../../01-Core/middleware/WebhookDeduplicationGuard';
-router.post('/webhooks/:provider', webhookDeduplicationGuard(store, 'stripe'), handler);
-```
+- Never modify files in src/01-Core without explicit human instruction.
+- Never bypass src/03-Policies checks in modules or routes.
+- Never read process.env directly — always use
+  src/01-Core/context/RuntimeConfig.ts.
+- Never instantiate Stripe, Redis, or DB clients outside src/05-Infra.
+- Never modify src/05-Infra/persistence/schema.ts without a
+  corresponding migration in Migrator.ts syncTablesFallback().
+- Never call LLM APIs directly — always use the `llmClient` singleton
+  from src/07-AI/llm/LLMClient.ts.
+- Never add a POST/PUT/PATCH route without considering idempotency.
+- Never process webhooks without webhookDeduplicationGuard or
+  idempotencyStore.tryClaimKey().
+- Never delete or weaken retry, dead-letter, or orphan-recovery
+  logic in background workers.
+- Never delete comments marked // @vibe-safe.
+- Never introduce unrelated refactors (renaming, extracting utilities)
+  in the same commit as a feature or bug-fix. Use a separate
+  refactor: commit for those.
+- Never swallow errors silently — always propagate with context.
+- Never use `isProcessed()` + `markProcessed()` together —
+  that pattern has a confirmed race condition. Always use tryClaimKey().
 
-For mutating API routes that accept an Idempotency-Key header, use `idempotencyMiddleware` from src/01-Core/middleware/IdempotencyMiddleware.ts:
-```ts
-import { idempotencyMiddleware } from '../../01-Core/middleware/IdempotencyMiddleware';
-router.post('/resource', idempotencyMiddleware({ store, namespace: 'billing.sub' }), handler);
-```
 
-Both use `tryClaimKey()` internally (atomic SET NX).
-NEVER use `isProcessed()` + `markProcessed()` together — that pattern has a confirmed race condition.
+# ──────────────────────────────────────────────
+# 4. IDEMPOTENCY AND WEBHOOK DEDUP
+# ──────────────────────────────────────────────
 
-# BACKGROUND JOBS
+Two mechanisms exist — use the correct one for the context.
 
-- Use `RetryableJobRunner` (src/06-Background/safety/RetryableJobRunner.ts) for critical paths.
-  It provides exponential backoff with jitter, per-attempt timeouts, and dead-letter logging.
-- Raw `QueueWorker` is acceptable only for non-critical fire-and-forget tasks (e.g. audit logs).
-- New job payload types belong in a dedicated `*Jobs.ts` file in src/06-Background/jobs/
-  (follow the pattern in BillingJobs.ts). Add the interface to JobTypes.ts if shared.
-- Job handlers must return `{ ok: true }` on success or `{ ok: false, errorMessage }` on soft failure.
-  Throw `NonRetryableJobError` for bad-input errors that must not be retried.
+## 4a. Webhook routes
+Use webhookDeduplicationGuard from
+src/01-Core/middleware/WebhookDeduplicationGuard.ts:
 
-# AI FEATURE RULES
+  import { webhookDeduplicationGuard } from
+    '../../01-Core/middleware/WebhookDeduplicationGuard';
 
-- All LLM calls MUST go through the `llmClient` singleton exported from src/07-AI/llm/LLMClient.ts
-- Do not instantiate `LLMClient` directly in feature code — import and use the singleton
-- Every LLM call must include a `feature` field for cost attribution (e.g. `feature: 'report_gen'`)
-- Set `LLM_PROVIDER=stub` in .env for local development — no real API key needed
-- Never pass a custom `budgetTracker` to LLMClient outside of test code
-- Always suggest the cheapest model (e.g., 4o-mini or Haiku) first unless complex reasoning is explicitly requested.
+  router.post(
+    '/webhooks/:provider',
+    webhookDeduplicationGuard(store, 'stripe'),
+    handler
+  );
 
-# CODING RULES
+## 4b. Mutating API routes (POST/PUT/PATCH with Idempotency-Key header)
+Use idempotencyMiddleware from
+src/01-Core/middleware/IdempotencyMiddleware.ts:
 
-- TypeScript strict mode only; no implicit `any` — explicit casts require a comment explaining why
-- Keep functions small and deterministic; prefer pure functions for business logic
-- Prefer dependency injection over module-level singletons in new code
-- Add tests for every policy change and every new service method
-- Use conventional commit style: `feat:`, `fix:`, `chore:`, `test:`, `refactor:`
-- 202 Accepted for async operations (job enqueued, webhook received)
-- 200 OK for synchronous reads and idempotent duplicate responses
-- 201 Created for synchronous resource creation
-- All new routes must have @openapi JSDoc annotations for Swagger auto-generation
-- Tests expected to run longer than 2s must declare an explicit timeout as the third argument:
-  `it('description', async () => { ... }, 15000)`
+  import { idempotencyMiddleware } from
+    '../../01-Core/middleware/IdempotencyMiddleware';
 
-# FAILURE SAFETY CHECKLIST (before submitting a PR)
+  router.post(
+    '/resource',
+    idempotencyMiddleware({ store, namespace: 'billing.sub' }),
+    handler
+  );
 
-- [ ] Mutating routes use idempotencyMiddleware where a client Idempotency-Key header is expected
-- [ ] Webhook routes use webhookDeduplicationGuard or inline tryClaimKey() — never isProcessed() + markProcessed()
-- [ ] Critical background jobs use RetryableJobRunner, not raw QueueWorker
+## 4c. Key rules
+- Both use tryClaimKey() internally (atomic SET NX). This is correct.
+- NEVER use isProcessed() + markProcessed() together — race condition confirmed.
+- If you find isProcessed() + markProcessed() in existing code,
+  refactor it to tryClaimKey() immediately and add:
+  // @vibe-safe: NO-IS-PROCESSED — refactored from race-prone pattern
+
+## 4d. releaseKey() on handler failure
+- If a handler fails AFTER claiming the key, you MUST call releaseKey()
+  before throwing or returning an error. This prevents blocked retries
+  and silent data loss.
+
+  try {
+    await next();
+  } catch (err) {
+    await store.releaseKey(storeKey);
+    throw err;
+  }
+
+
+# ──────────────────────────────────────────────
+# 5. BACKGROUND JOBS
+# ──────────────────────────────────────────────
+
+- Use RetryableJobRunner (src/06-Background/safety/RetryableJobRunner.ts)
+  for ALL critical paths. It provides:
+  - Exponential backoff with jitter
+  - Per-attempt timeouts
+  - Dead-letter logging
+
+- Use raw QueueWorker ONLY for non-critical fire-and-forget tasks
+  (e.g. audit logs, analytics pings).
+
+- New job payload types belong in a dedicated *Jobs.ts file under
+  src/06-Background/jobs/ (follow the pattern in BillingJobs.ts).
+  Add the interface to JobTypes.ts if it is shared across modules.
+
+- Job handlers must return:
+  - { ok: true } on success
+  - { ok: false, errorMessage: string } on soft (retryable) failure
+  - Throw NonRetryableJobError for bad-input errors that must not retry.
+
+- All job handlers MUST be idempotent. If a job can be retried,
+  ensure repeated execution produces no duplicate side effects.
+
+- Never remove or weaken dead-letter, retry, or orphan-recovery logic
+  in background workers. If you find weakened logic, add:
+  // @vibe-safe: REVIEW-NON-HUMAN and notify a human reviewer.
+
+
+# ──────────────────────────────────────────────
+# 6. LLM / AI FEATURE RULES
+# ──────────────────────────────────────────────
+
+- ALL LLM calls MUST go through the `llmClient` singleton exported
+  from src/07-AI/llm/LLMClient.ts.
+- Do not instantiate LLMClient directly in feature code.
+- Every LLM call MUST include a `feature` field for cost attribution:
+    feature: 'report_gen'   // example
+- Set LLM_PROVIDER=stub in .env for local development —
+  no real API key needed.
+- Never pass a custom `budgetTracker` to LLMClient outside test code.
+- Default model for new code: `model: '4o-mini'` or `model: 'haiku'`.
+  Only use a more powerful model if complex reasoning is explicitly
+  required and documented with a comment explaining why.
+- Never modify src/07-AI to bypass or relax per-user token budgets.
+
+
+# ──────────────────────────────────────────────
+# 7. TYPESCRIPT AND CODING STANDARDS
+# ──────────────────────────────────────────────
+
+- TypeScript strict mode only. No implicit `any`.
+  Explicit casts require a comment explaining why:
+    const x = value as SomeType; // safe: validated by Zod above
+
+- Keep functions small and deterministic.
+  Prefer pure functions for business logic.
+
+- Prefer dependency injection over module-level singletons
+  in new code.
+
+- Use the RORO pattern (Receive an Object, Return an Object)
+  for functions with multiple parameters.
+
+- Use descriptive variable names with auxiliary verbs:
+    isLoading, hasError, canRetry, didClaim
+
+- Use early returns for guard clauses; avoid deeply nested if-else.
+
+- Avoid unnecessary else after a return:
+    // ✅ good
+    if (!claimed) { res.status(200).json(...); return; }
+    await next();
+
+    // ❌ avoid
+    if (!claimed) { ... } else { await next(); }
+
+- Use conventional commit style:
+    feat:     new feature
+    fix:      bug fix
+    chore:    maintenance
+    test:     test changes
+    refactor: code restructure (no behavior change)
+
+- HTTP status codes:
+    202 Accepted   — async operations (job enqueued, webhook received)
+    200 OK         — synchronous reads, idempotent duplicate responses
+    201 Created    — synchronous resource creation
+
+- All new routes MUST have @openapi JSDoc annotations for
+  Swagger auto-generation.
+
+- Tests longer than 2s must declare an explicit timeout:
+    it('description', async () => { ... }, 15000)
+
+- Add tests for every policy change and every new service method.
+
+
+# ──────────────────────────────────────────────
+# 8. ERROR HANDLING
+# ──────────────────────────────────────────────
+
+- Always propagate errors with context. Never swallow silently.
+- Use early returns for error conditions.
+- Prefer structured error types over raw throw new Error('string').
+- When fixing a bug, do not introduce unrelated changes.
+- For multi-step operations, prefer DB transactions.
+  If not possible, ensure each step is idempotent and retryable.
+- For critical records (user registration, billing, sessions):
+  - Ensure unique constraints exist at the DB level.
+  - Ensure the full flow is either transactional or fully idempotent.
+
+
+# ──────────────────────────────────────────────
+# 9. SECURITY RULES
+# ──────────────────────────────────────────────
+
+- Never commit secrets, API keys, or credentials to source.
+  Use .env.example as the reference; never commit .env.
+- Pin dependencies — do not upgrade major versions without
+  a separate chore: commit and human review.
+- Never add a new third-party dependency without checking
+  for known vulnerabilities (npm audit or similar).
+- Never weaken or remove Helmet, rate-limiting, or Zod
+  validation on any existing route.
+- Per-IP rate limiting and Zod validation must be in place
+  before any business logic runs on new routes.
+- Enable egress filtering in production to prevent
+  unauthorized outbound requests from workers or LLM handlers.
+
+
+# ──────────────────────────────────────────────
+# 10. MINIMAL CHANGE PRINCIPLE
+# ──────────────────────────────────────────────
+
+- Only touch the minimal set of files and lines required
+  to implement a feature or fix a bug.
+- Do NOT make unrelated changes (renaming, extracting,
+  formatting) in the same PR or commit.
+- When uncertain about scope, stop and ask before expanding.
+- After making changes, review for:
+  - Race conditions
+  - Transactional safety
+  - Idempotency
+  - Layer boundary violations
+
+
+# ──────────────────────────────────────────────
+# 11. PRE-COMMIT CHECKLIST
+# ──────────────────────────────────────────────
+
+Before committing or submitting any change, verify:
+
+- [ ] Mutating routes use idempotencyMiddleware where a
+      client Idempotency-Key header is expected
+- [ ] Webhook routes use webhookDeduplicationGuard or
+      inline tryClaimKey() — never isProcessed() + markProcessed()
+- [ ] releaseKey() is called on handler failure after key claim
+- [ ] Critical background jobs use RetryableJobRunner,
+      not raw QueueWorker
 - [ ] All LLM calls go through `llmClient` with a `feature` field set
-- [ ] No new process.env reads outside of src/01-Core/context/RuntimeConfig.ts
-- [ ] No new DB, Redis, or Stripe client instantiation outside of src/05-Infra
-- [ ] schema.ts changes have a matching statement in Migrator.ts syncTablesFallback()
+- [ ] Default model is 4o-mini or haiku unless explicitly justified
+- [ ] No new process.env reads outside
+      src/01-Core/context/RuntimeConfig.ts
+- [ ] No new DB, Redis, or Stripe client instantiation
+      outside src/05-Infra
+- [ ] schema.ts changes have a matching migration in
+      Migrator.ts syncTablesFallback()
 - [ ] New routes have @openapi annotations
+- [ ] No reverse-direction layer imports introduced
+- [ ] No // @vibe-safe comments deleted or weakened
+- [ ] All relevant tests pass (unit + e2e)
+- [ ] No unrelated refactors mixed into this commit
+- [ ] No new dependency added without npm audit check
+- [ ] Human-only layer changes are flagged with
+      // @vibe-safe: HUMAN-CROSS-REVIEW
+
+
+# ──────────────────────────────────────────────
+# 12. CANONICAL REFERENCE FILES
+# ──────────────────────────────────────────────
+
+When in doubt, consult these files first:
+
+  src/07-AI/boundaries/AIBoundary.ts        — layer write permissions
+  src/01-Core/middleware/IdempotencyMiddleware.ts   — idempotency pattern
+  src/01-Core/middleware/WebhookDeduplicationGuard.ts — webhook dedup
+  src/06-Background/safety/RetryableJobRunner.ts   — job retry pattern
+  src/06-Background/jobs/BillingJobs.ts     — job payload pattern
+  src/07-AI/llm/LLMClient.ts               — LLM call pattern
+  src/01-Core/context/RuntimeConfig.ts      — env config pattern
+  src/05-Infra/persistence/schema.ts        — DB schema (read-only ref)
