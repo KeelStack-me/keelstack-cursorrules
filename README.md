@@ -234,6 +234,3 @@ These rules ship bundled with [KeelStack Engine](https://keelstack.me):
 MIT — copy, adapt, use freely.
 
 If you use these rules in your own project, you don't need to credit KeelStack. But if they save you from a production incident, I'd love to hear about it.
-
-
-Both files are now **fully aligned with v1.1.1 `.cursorrules`** — every new section (frontend, extension patterns, release key fix, security, observability, deployment) is reflected accurately in the changelog with clear "why" reasoning, and the README now serves as a **complete, scannable reference** for both backend and frontend users.
